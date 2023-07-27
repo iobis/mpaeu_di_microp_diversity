@@ -74,8 +74,9 @@
             <onlineUrl></onlineUrl> </associatedParty>
 <language>English</language>
 <metadataLanguage>English</metadataLanguage>
-<abstract><para>It was published in Ecological Archives (https://doi.org/http://dx.doi.org/10.1890/13-0236.1), and was authored by Sofia Sal, Ángel López-Urrutia, Xabier Irigoien, Derek S. Harbour, Roger P. Harris.</para></abstract>
-<abstract><para>Many macroecological theories have been developed to study the diversity on our planet. All these theories require the existence of consistent databases to test their predictions. In this work, we compiled a data set of marine microplankton species abundances at 788 stations with an extensive geographical coverage. Data were collected on different oceanographic cruises between 1992 and 2002. This database consists of abundances (cells/mL) for each species at each station and depth, together with estimates of the biomass and biovolume for each species. One of the key strengths in this database is that species identifications were made by the same taxonomist, which provides greater strength to the collection and ensures that estimates of species diversity are reliable. Environmental information has also been compiled at each station (chlorophyll, temperature, photosynthetically active radiation (PAR), nutrients) in order to have a characterization of the study area and to be used in studies on the environmental and biological controls of marine biodiversity.</para></abstract>
+<abstract><para>It was published in Ecological Archives (https://doi.org/http://dx.doi.org/10.1890/13-0236.1), and was authored by Sofia Sal, Ángel López-Urrutia, Xabier Irigoien, Derek S. Harbour, Roger P. Harris.
+                   
+Many macroecological theories have been developed to study the diversity on our planet. All these theories require the existence of consistent databases to test their predictions. In this work, we compiled a data set of marine microplankton species abundances at 788 stations with an extensive geographical coverage. Data were collected on different oceanographic cruises between 1992 and 2002. This database consists of abundances (cells/mL) for each species at each station and depth, together with estimates of the biomass and biovolume for each species. One of the key strengths in this database is that species identifications were made by the same taxonomist, which provides greater strength to the collection and ensures that estimates of species diversity are reliable. Environmental information has also been compiled at each station (chlorophyll, temperature, photosynthetically active radiation (PAR), nutrients) in order to have a characterization of the study area and to be used in studies on the environmental and biological controls of marine biodiversity.</para></abstract>
 <coverage><geographicCoverage>
                 <geographicDescription>Data were compiled for 788 stations during different oceanographic cruises in temperate, polar and subtropical regions. Stations sampled cover a wide range of marine ecosystems, ranging from coastal to open ocean. North Atlantic Ocean samples include the Irminger Sea, Norwegian Sea, North Sea, and Iceland Basin. Samples were also collected on cruises along the South Atlantic Ocean (mainly Atlantic Meridional Transect cruises), Benguela current, Indian Ocean, and West Coast of the North Pacific Ocean. One of the experiments, ''Bergen'', took place in open-air mesocosms at the Espegrend Marine Biological Station (University of Bergen).</geographicDescription>
                 <boundingCoordinates>
@@ -87,8 +88,8 @@
             </geographicCoverage>
 <temporalCoverage>
                 <rangeOfDates>
-                    <beginDate><calendarDate>1992-10</calendarDate></beginDate>
-                    <endDate><calendarDate>2002-05</calendarDate></endDate>
+                    <beginDate><calendarDate>1992-10-01</calendarDate></beginDate>
+                    <endDate><calendarDate>2002-05-01</calendarDate></endDate>
                 </rangeOfDates>
             </temporalCoverage></coverage>
 <purpose><para>This data ingestion of the BioTIME dataset into OBIS aims to provide easier access to the data and is part of an effort linked to the MPA Europe project.</para></purpose>
