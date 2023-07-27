@@ -182,7 +182,8 @@ occurrence <- abundance_joined %>%
     family = Family,
     genus = Genus,
     specificEpithet = Species,
-    scientificName = dwc_scientificName
+    scientificName = dwc_scientificName,
+    basisOfRecord = "Occurrence"
   )
 ```
 
