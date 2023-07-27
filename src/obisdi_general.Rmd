@@ -1,0 +1,236 @@
+---
+title: "Marine biodiversity data ingestion for OBIS (DwC translation)"
+subtitle: "Marine microplankton diversity database"
+author:
+- Silas C. Principe (processing)
+- Pieter Provoost (processing)
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    df_print: paged
+    number_sections: yes
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+This document describes how we map the checklist data to Darwin Core. The source file for this document can be found [here](https://github.com/iobis/mpaeu_di_microp_diversity/blob/master/src/obisdi_general.Rmd).
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
+
+Load libraries:
+
+```{r}
+library(tidyverse)      # Data manipulation
+library(reshape2)       # Data manipulation
+library(obisdi)         # Tools for data ingestion for OBIS
+library(here)           # Get paths (important!)
+library(arrow)          # To deal with parquet files
+library(worrms)         # Taxonomy checking
+```
+
+# Read source data
+
+This dataset was selected from the BioTIME^[https://biotime.st-andrews.ac.uk/] database and can be found in this link: https://biotime.st-andrews.ac.uk/selectStudy.php?study=310. However, this dataset is also available directly from the published data paper at _Ecological Archives_ [(here)](https://www.esapubs.org/archive/ecol/E094/149/), so we download from source.
+
+```{r}
+# Get the path to data/raw
+raw_path <- here("data", "raw")
+
+# Download from source
+if (!file.exists(paste0(raw_path, "/", "Table1.csv"))) {
+  download.file("https://www.esapubs.org/archive/ecol/E094/149/PhytoDataBase.zip",
+                paste0(raw_path, "/PhytoDataBase.zip"))
+  unzip(paste0(raw_path, "/PhytoDataBase.zip"),
+        exdir = paste0(raw_path, "/"))
+}
+
+list.files(raw_path)
+```
+
+There is also extensive metadata available at the website https://www.esapubs.org/archive/ecol/E094/149/metadata.php. We manually downloaded a copy in PDF of the metadata, which is stored on the "raw" folder. We extract some important contextual information below:
+
+> [...] we compiled a data set of marine microplankton species abundances (cells/mL), together with estimates of biomass and cell biovolume. These data were collected at 788 stations on a number of oceanographic cruises between 1992 and 2002. The compilation covers a wide range of marine ecosystems, ranging from coastal to open ocean. Environmental information has also been compiled for different oceanographic parameters (chlorophyll, temperature, PAR, nutrients, mixed layer depth) for each station. 
+
+> Data set is downloadable as a single archive, PhytoDataBase.zip (215.5 KB), which contains the following *.csv data files:
+Table 1: Stations and cast description, including date, location and data for oceanographic variables such as nutrients or temperature.
+Table 2: Species identification for the whole data set, including phylogenetic classification, author comments and carbon and biovolume for each species. Each row corresponds to each column in Table 3.
+Table 3: Abundance for each species (by columns) at each station (by rows). Species carbon content can vary from one station to another, for those cases the species is repeated each column representing a different carbon content as specified in Table 2. For this reason we have more columns than species total number.
+
+# Preprocessing
+
+We first read the raw data:
+
+```{r}
+stations <- read.csv(paste0(raw_path, "/Table1.csv"))
+
+head(stations)
+
+speciesid <- read.csv(paste0(raw_path, "/Table2.csv"))
+
+head(speciesid)
+
+abundance <- read.csv(paste0(raw_path, "/Table3.csv"))
+
+head(abundance)
+```
+
+From the metadata we know that each row in the `abundance` data is one station. Thus, we change the first column name to facilitate the work with the data.
+
+```{r}
+abundance <- abundance %>% 
+  rename(SampleID = X)
+```
+
+# Darwin Core mapping
+
+We will need to generate three files for the submission:
+1. event - describe the sampling event
+2. occurrence - the occurrence of species in an event
+3. extendedMeasurementOrFact table - to include data measurements (both environmental and of the species)
+
+## `event` table
+
+This dataset already have a single identifier for each sampling, which we will use as the **eventID**. 
+
+```{r}
+# Create event table
+# Because this is already the final format, we don't introduce the acronym dwc_
+# to the column names.
+event <- stations %>%
+  select(
+    eventID = SampleID,
+    parentEventID = Cruise,
+    eventDate = Date,
+    fieldNumber = Original_SampleNo,
+    minimumDepthInMeters = Depth,
+    maximumDepthInMeters = Depth,
+    decimalLongitude = Lon,
+    decimalLatitude = Lat
+  )
+
+head(event, 3)
+```
+
+## `occurrence` table
+
+We will now format the `occurrence` table. Part of our work here will be used on the next step of producing the MoF tables.
+
+First step is to add the taxon names of the `abundance` table (i.e. the colnames) to the `speciesid` table:
+
+```{r}
+speciesid$taxon_name <- names(abundance)[2:ncol(abundance)]
+
+head(speciesid, 3)
+```
+
+Some records are identified up to the species level, while other to lower levels. Thus, we need to have a `scientificName` column with the highest taxonomic rank available.
+
+```{r}
+# Add the most specific taxa on scientificName
+speciesid <- speciesid %>%
+  mutate(species_fname = ifelse(is.na(Species), NA, paste(Genus, Species))) %>%
+  rowwise() %>%
+  mutate(dwc_scientificName = ifelse(is.na(species_fname),
+                                 c_across(2:8)[(which.max(is.na(c_across(2:8)))-1)],
+                                 species_fname)) %>%
+  select(-species_fname)
+
+head(speciesid, 3)
+```
+
+This is not yet our `occurrence` table. We will need to start working with the `abundance` table before that. To convert the abundance table to the MoF (next section), we need to first change it from a wide to a longer format. Then, we join with the `speciesid` table, so we will have the taxonomic information for each sample.
+
+```{r}
+abundance_long <- abundance %>%
+  melt(id.vars = c("SampleID"), variable.name = "taxon_name", value.name = "abundance")
+
+colnames(abundance_long)
+
+# join long abundance with speciesid and remove zeroes for simplicity
+abundance_joined <- abundance_long %>%
+  left_join(speciesid, by = "taxon_name") %>%
+  filter(abundance > 0)
+
+head(abundance_joined, 3)
+```
+
+We need now to create an __unique__ identifier for each occurrence. We will do this by putting together the `SampleID` and the `taxon_name`.
+
+```{r}
+abundance_joined <- abundance_joined %>%
+  mutate(taxon_name = gsub("\\.", "_", taxon_name)) %>%
+  unite(occurrenceID, SampleID, taxon_name, sep = "_", remove = FALSE)
+
+# Quick check that everything is ok
+stopifnot(nrow(abundance_joined) == length(unique(abundance_joined$occurrenceID)))
+```
+
+At this point we can make our `occurrence` table.
+
+```{r}
+# create occurrence table
+occurrence <- abundance_joined %>%
+  select(
+    eventID = SampleID,
+    occurrenceID,
+    phylum = Phylum,
+    class = Class,
+    order = Order,
+    family = Family,
+    genus = Genus,
+    specificEpithet = Species,
+    scientificName = dwc_scientificName
+  )
+```
+
+## `mof` table
+
+For the __measurementOrFact__, we need a single table containing the environmental information (which is on the `stations` object) and the species measurements which are on the `abundance_joined` object. We start by creating the `mof` table for the event part:
+
+```{r}
+# Create event mof
+event_mof <- stations %>%
+  rename_with(~ gsub("QF", "QualityFlag_", .x, fixed = TRUE), contains("QF", ignore.case = F)) %>%
+  rename(eventID = SampleID) %>%
+  select(-Cruise, -Date, -Original_SampleNo, -Original_StationNo, -Depth, -Lat, -Lon, -Daylength) %>%
+  melt(id.vars = c("eventID"), variable.name = "measurementType", value.name = "measurementValue")
+
+head(event_mof, 3)
+```
+
+And then for the occurrences part:
+
+```{r}
+# create occurrence mof
+occurrence_mof <- abundance_joined %>%
+  select(eventID = SampleID, occurrenceID, abundance, carbon = Carbon, biovolume = Biovolume) %>%
+  melt(id.vars = c("eventID", "occurrenceID"), variable.name = "measurementType", value.name = "measurementValue") %>%
+  filter(!is.na(measurementValue))
+
+head(occurrence_mof, 3)
+```
+
+And finally put both together:
+
+```{r}
+mof <- bind_rows(event_mof, occurrence_mof) %>%
+  select(eventID, occurrenceID, measurementType, measurementValue)
+
+head(mof, 3)
+```
+
+# Export final files
+
+We export in `csv` format:
+
+```{r}
+proc_path <- here("data", "processed")
+
+write_csv(event, paste0(proc_path, "/event.csv"))
+write_csv(occurrence, paste0(proc_path, "/occurrence.csv"))
+write_csv(mof, paste0(proc_path, "/mof.csv"))
+```
+
