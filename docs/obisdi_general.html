@@ -567,7 +567,8 @@ occurrence &lt;- abundance_joined %&gt;%
     genus = Genus,
     specificEpithet = Species,
     scientificName = dwc_scientificName
-  )</code></pre>
+  ) %&gt;%
+  mutate(basisOfRecord = &quot;Occurrence&quot;)</code></pre>
 </div>
 <div id="mof-table" class="section level2" number="3.3">
 <h2><span class="header-section-number">3.3</span> <code>mof</code>
